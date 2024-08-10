@@ -85,12 +85,27 @@ class DMTMonoFile(DMTBinaryFile):
         -------
         Images object
             Images object containing image info in current frame.
+
+        History
+        -------
+        2024-08-10: Yongjie Huang (OU, huangynj@gmail.com), fixed the issue when particle spanning two frames.
+
         """
         data = self.data[frame]
         record = data['data']
+        try:
+            record_next = self.data[frame+1]['data']
+            Next_record_Flag = True
+            record = numpy.concatenate((record, record_next))
+        except Exception as e:
+            # raise e
+            # pass
+            Next_record_Flag = False
+
         i = 0
         frame_decomp = []
-        while i < 4096:
+        # while i < 4096:
+        while True:
             b1 = record[i]
             counts = (b1 & 31) + 1
             if b1 & 128 == 128:
@@ -102,13 +117,27 @@ class DMTMonoFile(DMTBinaryFile):
                 continue
             else:
                 frame_decomp.extend(record[i + 1:i + counts + 1])
+                # if len(record[i + 1:i + counts + 1]) != counts:
+                #     print(frame, i, len(record[i + 1:i + counts + 1]), counts)
+                #     print(frame, frame_decomp)
                 i += counts
             i += 1
+
+            # Note: The condition "i > 4096 + 8" ensures that we read the first full sequence of "7, [170] * 8"
+            # from the next frame. Or, the first partical of the next frame will be missed.
+            if Next_record_Flag and (len(frame_decomp) > 16) and \
+               (frame_decomp[-8:] == self.syncword).all() and (i > 4096 + 8): 
+                break  
+            if (not Next_record_Flag) and (i >= 4096):
+                break
+
         date = datetime.datetime(data['year'],
                                  data['month'],
                                  data['day'])
         # if frame % 1000 == 0:
         #     print('At frame ' + str(frame) + ' of ' + str(len(self.data)))
+        # if 98 <= frame <= 99:
+        #     print('i = ', i, frame, frame_decomp, date, '\n', frame_decomp[-8:], '\n')
         return self.extract_images(frame, frame_decomp, date)
 
     def extract_images(self, frame, frame_decomp, date):
@@ -164,7 +193,7 @@ class DMTMonoFile(DMTBinaryFile):
                                                    seconds=second)
 
             epoch_time = (image_time - self.start_date).total_seconds()
-            images.ns.append(millisecond * 1e6 + nanosecond_eigths / 125)
+            images.ns.append(millisecond * 1e6 + nanosecond_eigths * 125) # Fix nanosecond, Yongjie Huang, 2024-08-09.
             images.sec.append(epoch_time)
             if len(image) % self.diodes != 0:
                 pad_amount = math.ceil(len(image) / self.diodes) * self.diodes - len(image)

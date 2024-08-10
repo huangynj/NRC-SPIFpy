@@ -95,12 +95,12 @@ class DMTMonoFile(DMTBinaryFile):
         record = data['data']
         try:
             record_next = self.data[frame+1]['data']
-            Next_record_Flag = True
+            next_record_exists = True
             record = numpy.concatenate((record, record_next))
         except Exception as e:
             # raise e
             # pass
-            Next_record_Flag = False
+            next_record_exists = False
 
         i = 0
         frame_decomp = []
@@ -125,10 +125,10 @@ class DMTMonoFile(DMTBinaryFile):
 
             # Note: The condition "i > 4096 + 8" ensures that we read the first full sequence of "7, [170] * 8"
             # from the next frame. Or, the first partical of the next frame will be missed.
-            if Next_record_Flag and (len(frame_decomp) > 16) and \
+            if next_record_exists and (len(frame_decomp) > 16) and \
                (frame_decomp[-8:] == self.syncword).all() and (i > 4096 + 8): 
                 break  
-            if (not Next_record_Flag) and (i >= 4096):
+            if (not next_record_exists) and (i >= 4096):
                 break
 
         date = datetime.datetime(data['year'],

@@ -70,7 +70,8 @@ class DMTMonoFile(DMTBinaryFile):
                     err = False
                 except ValueError as v:
                     pass
-
+    
+    '''
     def process_frame(self, frame):
         """ Method to process single frame of image data. Decompresses image
         data from frame and passes resulting image data to extract_images
@@ -138,6 +139,93 @@ class DMTMonoFile(DMTBinaryFile):
         #     print('At frame ' + str(frame) + ' of ' + str(len(self.data)))
         # if 98 <= frame <= 99:
         #     print('i = ', i, frame, frame_decomp, date, '\n', frame_decomp[-8:], '\n')
+        return self.extract_images(frame, frame_decomp, date)
+    '''
+
+    def process_frame(self, frame):
+        """ Method to process single frame of image data. Decompresses image
+        data from frame and passes resulting image data to extract_images
+        method to extract image info from image buffer.
+
+        Parameters
+        ----------
+        frame : int
+            Frame number in self.data to process.
+
+        Returns
+        -------
+        Images object
+            Images object containing image info in current frame.
+
+        History
+        -------
+        2024-08-14: Yongjie Huang (OU, huangynj@gmail.com), updated the function with a robust method if compressed image buffers don't begin with a RLEHB:
+                        1) Search syncword indices before decompressing frame
+                        2) Decompress data only between syncwords
+        2024-08-10: Yongjie Huang (OU, huangynj@gmail.com), fixed the issue when particle spanning two frames.
+
+        """
+        data = self.data[frame]
+        record = data['data']
+        try:
+            record_next = self.data[frame+1]['data']
+            next_record_exists = True
+            record = numpy.concatenate((record, record_next))
+        except Exception as e:
+            # raise e
+            # pass
+            next_record_exists = False
+
+        #-- Search syncword indices before decompressing frame
+        record_list = record.tolist()
+        syncword_idx = []
+        ii = 0
+        while True:
+            ii = self.search_syncword(record_list, ii)
+
+            if ii >= len(record_list) - 17:
+                break
+
+            if ii > 0:                             # Ensure a RLEHB before the syncword
+                syncword_idx.append(ii)
+
+            if next_record_exists and (ii > 4096): # Has reached the first full sequence of "RLEHB, [170] * 8" from the next frame
+                break
+
+            ii = ii + 8
+
+        #-- decompress data only between syncwords
+        frame_decomp = []
+        for i_sw in range(len(syncword_idx)-1):
+            n_170 = (record[syncword_idx[i_sw]-1] & 31) + 1 # Decompress the RLEHB before the syncword, because it is not always "7" !!!
+            frame_decomp.extend([170] * n_170)
+
+            ii_s = syncword_idx[i_sw] + n_170
+            ii_e = syncword_idx[i_sw+1] - 1                 # Exclude the RLEHB (e.g., "7") before the syncword
+
+            i = ii_s
+            while i < ii_e:
+                b1 = record[i]
+                counts = (b1 & 31) + 1
+                if b1 & 128 == 128:
+                    frame_decomp.extend([00] * counts)
+                elif b1 & 64 == 64:
+                    frame_decomp.extend([255] * counts)
+                elif b1 & 32 == 32:
+                    i = i + 1
+                    continue
+                else:
+                    frame_decomp.extend(record[i + 1:i + counts + 1])
+                    i += counts
+                i += 1
+
+        frame_decomp.extend(self.syncword) # Add the final syncword
+
+        date = datetime.datetime(data['year'],
+                                 data['month'],
+                                 data['day'])
+        # if frame % 1000 == 0:
+        #     print('At frame ' + str(frame) + ' of ' + str(len(self.data)))
         return self.extract_images(frame, frame_decomp, date)
 
     def extract_images(self, frame, frame_decomp, date):

@@ -418,11 +418,11 @@ class SPECFile(BinaryFile):
         record = data['data']
         try:
             record_next = self.data[frame+1]['data']
-            Next_record_Flag = True
+            next_record_exists = True
         except Exception as e:
             # raise e
             # pass
-            Next_record_Flag = False
+            next_record_exists = False
         # print(record)
 
         # Define Images objects for current frame
@@ -554,7 +554,7 @@ class SPECFile(BinaryFile):
                     reach_record_end = True
 
                 if reach_record_end:
-                    if Next_record_Flag:
+                    if next_record_exists:
                         record_pad = numpy.concatenate((record, record_next))
                     else:
                         break
@@ -677,7 +677,7 @@ class SPECFile(BinaryFile):
                 '''
                 if i + hk_length > len(record): # reach the end of record
                     reach_record_end = True
-                    if Next_record_Flag:
+                    if next_record_exists:
                         record_pad = numpy.concatenate((record, record_next))
                     elif i + 50 < len(record):
                         record_pad = record

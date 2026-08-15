@@ -312,8 +312,10 @@ class SPECFile(BinaryFile):
             elapsed_count, prepend=elapsed_count[0]
         ).astype(numpy.float64)
 
-        # One count represents one resolution element along the flight path.
-        delta_time = delta_count * self.resolution * 1.0e-6 / tas
+        # HVPS4 counter ticks are 50 µm even though its coarse physical pixels
+        # and INI resolution are 150 µm.
+        timing_resolution = 50 if self.name == 'HVPS4' else self.resolution
+        delta_time = delta_count * timing_resolution * 1.0e-6 / tas
         delta_buffer = numpy.diff(
             buffer_time, prepend=buffer_time[0]
         )

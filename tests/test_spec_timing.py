@@ -65,6 +65,19 @@ class TestSPECTiming(unittest.TestCase):
             image_time, [0.0, 0.5, 1.0, 1.5, 2.0]
         )
 
+    def test_hvps4_counter_timing_uses_50_um_not_ini_resolution(self):
+        spec = SPECFile('dummy.HVPS4', 'HVPS4', 150)
+        counts = numpy.array([0, 2_000_000], dtype=numpy.uint64)
+
+        image_time = spec._calculate_image_times(
+            counts,
+            numpy.full(2, 100.0),
+            numpy.array([0.0, 1.0]),
+        )
+
+        self.assertEqual(spec.resolution, 150)
+        numpy.testing.assert_allclose(numpy.diff(image_time), [1.0])
+
     def test_anchor_windows_limit_tas_drift_without_time_steps(self):
         modulus = 1 << 32
         buffer_time = numpy.arange(700, dtype=numpy.float64)
